@@ -159,7 +159,7 @@ namespace Kratos
             for (ModelPart::NodeIterator it = mr_model_part.NodesBegin(); it != mr_model_part.NodesEnd(); ++it)
             {
                 double& norm = it->GetSolutionStepValue(EQUIVALENT_NODAL_STRESS);
-                norm /= MaxEqStress;
+                norm /= (MaxEqStress*1e4);
             }
 
 

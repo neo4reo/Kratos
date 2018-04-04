@@ -26,8 +26,7 @@ class FEMDEM_Solution:
 		self.DEM_Solution = DEM.DEM_for_coupling_Solution()
 
 		# Initialize Remeshing files
-		
-		self.DoRemeshing = False
+		self.DoRemeshing = True #hard coded
 		if self.DoRemeshing:
 			mmg_parameter_file = open("MMRParameters.json",'r')
 			self.mmg_parameters = KratosMultiphysics.Parameters(mmg_parameter_file.read())
@@ -81,13 +80,14 @@ class FEMDEM_Solution:
 
 #============================================================================================================================
 	def InitializeSolutionStep(self):
-		self.FEM_Solution.InitializeSolutionStep()
 
 		if self.DoRemeshing:
 			self.RemeshingProcessMMG.ExecuteInitializeSolutionStep()
 
+		self.FEM_Solution.InitializeSolutionStep()  # modificado orden con initialize del mmg
+
 		# just for testing ->Remove
-		#self.FEM_Solution.GraphicalOutputPrintOutput()
+		self.FEM_Solution.GraphicalOutputPrintOutput()
 		# ***********************
 
 #============================================================================================================================
@@ -268,10 +268,8 @@ class FEMDEM_Solution:
 		# write output results GiD: (frequency writing is controlled internally)
 		self.FEM_Solution.GraphicalOutputPrintOutput()
 
-		# processes to be executed after witting the output
+		# processes to be executed after writting the output
 		self.FEM_Solution.model_processes.ExecuteAfterOutputStep()
-
-		self.ParticleCreatorDestructor.ClearElementsAndNodes()
 
 		if self.DoRemeshing:
 			self.RemeshingProcessMMG.ExecuteFinalizeSolutionStep()
@@ -283,6 +281,7 @@ class FEMDEM_Solution:
 		self.FEM_Solution.Finalize()
 		self.DEM_Solution.Finalize()
 		self.DEM_Solution.CleanUpOperations()
+		
 		if self.DoRemeshing:
 			self.RemeshingProcessMMG.ExecuteFinalize()
 

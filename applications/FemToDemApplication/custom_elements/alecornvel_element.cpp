@@ -431,14 +431,6 @@ namespace Kratos
 				damage[cont] = damagee;
 				this->Set_NonConvergeddamages(damagee, cont);
 
-				//if (this->Id() == 466 && rCurrentProcessInfo[STEP] > 15)
-				//{
-				//	KRATOS_WATCH(damagee)
-				//	KRATOS_WATCH(l_char)
-				//	KRATOS_WATCH(l_char)
-
-				//}
-
 			} // Loop Over Edges
 
 			Vector TwoMaxDamages;

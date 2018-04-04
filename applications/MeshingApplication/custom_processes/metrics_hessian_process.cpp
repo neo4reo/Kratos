@@ -212,7 +212,7 @@ Vector ComputeHessianSolMetricProcess<TDim, TVarType>::ComputeHessianMetricTenso
     // We compute the product
     const bounded_matrix<double, TDim, TDim>& matric_matrix =  prod(trans(eigen_vector_matrix), prod<temp_type>(eigen_values_matrix, eigen_vector_matrix));
 
-	KRATOS_WATCH(matric_matrix) // ya son iguales aqui
+	//KRATOS_WATCH(matric_matrix) // ya son iguales aqui
     
     // Finally we transform to a vector
     const Vector& metric = MetricsMathUtils<TDim>::TensorToVector(matric_matrix);
