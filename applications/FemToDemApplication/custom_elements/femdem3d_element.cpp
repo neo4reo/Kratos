@@ -1187,7 +1187,7 @@ namespace Kratos
 		double f = 0.0, F = 0.0; /// F = f-c = 0 classical definition of yield surface
 
 		// Check Modified Mohr-Coulomb criterion
-		if (I1 == 0.0) { f = 0; }
+		if (I1 == 0.0) { f = 0.0; }
 		else
 		{
 			theta = Calculate_Theta_Angle(J2, J3);
@@ -1200,7 +1200,7 @@ namespace Kratos
 	
 		F = f - c_threshold;
 
-		if (F <= 0)  // Elastic region --> Damage is constant 
+		if (F <= 0.0)  // Elastic region --> Damage is constant 
 		{
 			rdamage = this->Get_Convergeddamages(cont);
 		}

@@ -439,7 +439,6 @@ namespace Kratos
 		}
 		if (rVariable == STEEL_STRESS_TENSOR)
 		{
-
 			CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
 		}
 		if (rVariable == CONCRETE_STRESS_TENSOR)
@@ -450,6 +449,187 @@ namespace Kratos
 		{
 			CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
 		}
+	}
+
+	// **** plasticity methods *****
+	void RomFemDem3DElement::IntegrateStressPlasticity(Vector& rIntegratedStress, const Vector& PredictiveStress, const Matrix& C)
+	{ // ecuua
+
+	}
+
+	void RomFemDem3DElement::VonMisesYieldCriterion(const Vector& StressVector, Vector& rDeviator, double& ryield, double& rJ2)
+	{
+		double I1 = this->Calculate_I1_Invariant(StressVector);
+
+		rDeviator = StressVector;
+		double Pmean = I1 / 3;
+
+		rDeviator[0] -= Pmean;
+		rDeviator[1] -= Pmean;
+		rDeviator[2] -= Pmean;
+
+		rJ2 = 0.5*(rDeviator[0]*rDeviator[0] + rDeviator[1]*rDeviator[1] + rDeviator[2]*rDeviator[2]) +
+		(rDeviator[3]*rDeviator[3] + rDeviator[4]*rDeviator[4] + rDeviator[5]*rDeviator[5]);
+
+		ryield = sqrt(3.0*rJ2);
+	}
+
+	void RomFemDem3DElement::CalculatePlasticParameters(const Vector& StressVector, double& rYield, double& rKp,
+		double& rPlasticDenominator, Vector& rFluxVector, double& rCapap, const Vector& PlasticStrainIncr, const Matrix& C)
+	{ // modaux
+		Vector Deviator = ZeroVector(6), HCapa = ZeroVector(6);
+		double J2 = 0.0, r0 = 0.0, r1 = 0.0, Slope = 0.0, HardeningParam = 0.0;
+
+		this->VonMisesYieldCriterion(StressVector, Deviator, rYield, J2);
+		this->CalculateFluxVector(StressVector, Deviator, J2, rFluxVector);
+		this->CalculateRFactors(StressVector, r0, r1);
+		this->CalculatePlasticDissipation(StressVector, r0, r1, PlasticStrainIncr, rCapap, HCapa);
+		this->CalculateEquivalentStressThreshold(rCapap, r0, r1, rKp, Slope);
+		this->CalculateHardeningParameter(rFluxVector, Slope, HCapa, HardeningParam);
+		this->CalculatePlasticDenominator(rFluxVector, C, HardeningParam, rPlasticDenominator);
+	}
+
+	void RomFemDem3DElement::CalculateFluxVector(const Vector& StressVector, const Vector& rDeviator, const double& J2, Vector& rFluxVector)
+	{
+		// Only valid for Von Mises Yield Surf
+		Vector AuxVec = ZeroVector(6);
+		double denomJ2 = 1 / (2.0*sqrt(J2));
+
+		for (int i = 0; i < AuxVec.size(); i++)
+		{
+			AuxVec[i] = rDeviator[i] * denomJ2;
+		}
+
+		AuxVec[3] *= 2.0; 
+		AuxVec[4] *= 2.0; 
+		AuxVec[5] *= 2.0; 
+
+		rFluxVector = sqrt(3)*AuxVec;
+	}
+
+	void RomFemDem3DElement::CalculateRFactors(const Vector& StressVector,double& r0, double& r1)
+	{
+		Vector PrincipalStresses = ZeroVector(3);
+		this->CalculatePrincipalStresses(PrincipalStresses, StressVector);
+
+		double suma = 0.0, sumb = 0.0, sumc = 0.0;
+		Vector SA = ZeroVector(3) , SB = ZeroVector(3), SC = ZeroVector(3);
+
+		for (int i = 0; i < 3; i++)
+		{
+			SA[i] = abs(PrincipalStresses[i]);
+			SB[i] = 0.5*(PrincipalStresses[i]  + SA[i]);
+			SC[i] = 0.5*(-PrincipalStresses[i] + SA[i]);
+
+			suma += SA[i];
+			sumb += SB[i];
+			sumc += SC[i];
+		}
+
+		if (suma != 0.0)
+		{
+			r0 = sumb/suma;
+			r1 = sumc/suma;
+		}
+		else
+		{
+			r0 = sumb;
+			r1 = sumc;
+		}
+	}
+
+	void RomFemDem3DElement::CalculatePlasticDissipation(const Vector& PredictiveSress, const double& r0, const double& r1,
+	 const Vector& PlasticStrainInc, double& Capap, Vector& rHCapa)
+	{
+		double n, Gf, Gfc, l_char, hlim, C0, C1, fc, ft, Volume, gf, gfc;
+
+		fc  = this->GetProperties()[YIELD_STRESS_C_STEEL];
+		ft  = this->GetProperties()[YIELD_STRESS_T_STEEL];
+		n   = fc/ft;
+		Gf  = this->GetProperties()[FRACTURE_ENERGY_STEEL];
+		Gfc = n*n*Gf;
+		Volume = this->GetGeometry().Volume();
+		l_char = pow(Volume, 1/3);  // not correct todo
+
+		gf  = Gf/l_char;
+		gfc = Gfc/l_char;
+
+		double Const0 = 0.0, Const1 = 0.0;
+		if (gf > 0.000001)  Const0 = r0 / gf;
+		if (gfc > 0.000001) Const1 = r1 / gfc;
+
+		double Const = Const0 + Const1;
+		double Dcapa = 0.0;
+
+		for (int i = 0; i < 6; i++)
+		{
+			rHCapa[i] = Const*PredictiveSress[i];
+			Dcapa += rHCapa[i]*PlasticStrainInc[i];
+		}
+
+		if (Dcapa < 0.0 | Dcapa > 1.0) Dcapa = 0.0;
+
+		Capap += Dcapa;
+	}
+
+	void RomFemDem3DElement::CalculateEquivalentStressThreshold(const double& Capap, const double& r0, const double& r1,
+		double& rEquivalentStressThreshold, double& rSlope)
+	{
+		double fc, ft, n;
+		fc = this->GetProperties()[YIELD_STRESS_C_STEEL];
+		ft = this->GetProperties()[YIELD_STRESS_T_STEEL];
+		n  = fc / ft;
+		Vector G = ZeroVector(2), EqTrhesholds = ZeroVector(2), Slopes = ZeroVector(2);
+		G[0]  = this->GetProperties()[FRACTURE_ENERGY_STEEL];
+		G[1]  = n*n*G[0];
+
+		for (int i = 0; i < 2; i++) // tension and compression curves
+		{
+			this->LinearCalculateThreshold(Capap, G[i], EqTrhesholds[i], Slopes[i]);
+		}
+
+		rEquivalentStressThreshold = r0 * EqTrhesholds[0] + r1 * EqTrhesholds[1];
+		rSlope = rEquivalentStressThreshold*((r0 * Slopes[0] / EqTrhesholds[0]) + (r1 * Slopes[1] / EqTrhesholds[1]));
+	}
+
+	void RomFemDem3DElement::LinearCalculateThreshold(const double& Capap, const double& Gf, double& rEqThreshold, double& rSlope)
+	{
+		double fc = this->GetProperties()[YIELD_STRESS_C_STEEL];
+		// Linear case!!
+		rEqThreshold = fc*sqrt(1 - Capap);
+		rSlope = -0.5*(fc*fc/(rEqThreshold));
+	}
+
+	void RomFemDem3DElement::CalculateHardeningParameter(const Vector& FluxVector, const double& SlopeThreshold,
+		const Vector& HCapa, double& rHardeningParam)
+	{
+		rHardeningParam = -SlopeThreshold;
+		double aux = 0.0;
+
+		for (int i = 0; i < 6; i++)
+		{
+			aux += HCapa[i] * FluxVector[i];
+		}
+
+		if (aux != 0.0) rHardeningParam *= aux;
+	}
+
+	void RomFemDem3DElement::CalculatePlasticDenominator(const Vector& FluxVector, const Matrix& ElasticConstMatrix,
+		const double& HardeningParam, double& rPlasticDenominator)
+	{   // only for isotropic hardening
+		double PlastDenom = 0.0, A1 = 0.0, A2 = 0.0, A3 = 0.0;
+		Vector Dvect;
+
+		noalias(Dvect) = prod(FluxVector, ElasticConstMatrix);
+
+		for (int i = 0; i < 6; i++)
+		{
+			A1 += Dvect[i] * FluxVector[i];
+		}
+
+		A3 = HardeningParam;
+
+		rPlasticDenominator = 1 / (A1 + A2 + A3);
 	}
 
 

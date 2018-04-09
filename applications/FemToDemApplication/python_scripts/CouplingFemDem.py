@@ -114,6 +114,9 @@ class FEMDEM_Solution:
 		# We fill the variable EQUIVALENT_NODAL_STRESS with the VonMises stress
 		#KratosFemDem.StressToNodesProcess(self.FEM_Solution.main_model_part, 2).Execute()
 
+		#self.FEM_Solution.main_model_part.GetElement(7).Set(KratosMultiphysics.TO_ERASE, True)
+		#self.FEM_Solution.main_model_part.RemoveElementsFromAllLevels(KratosMultiphysics.TO_ERASE)
+
 		'''
 		# We calculate the gradient of the desired variable
 		local_gradient = KratosMultiphysics.ComputeNodalGradientProcess2D(self.FEM_Solution.main_model_part,
@@ -343,6 +346,7 @@ class FEMDEM_Solution:
 
 					# DEM generated for this Element
 					Element.SetValue(KratosFemDem.DEM_GENERATED, True)
+					Element.Set(KratosMultiphysics.TO_ERASE, True)
 
 				# --------------------- 2ND SCENARIO -----------------------------
 				if NumberOfDEM == 2: # we must create 1 DEM
@@ -385,7 +389,8 @@ class FEMDEM_Solution:
 						Element.GetNodes()[index].SetValue(KratosMultiphysics.RADIUS, R2)
 
 					# DEM generated for this Element
-					Element.SetValue(KratosFemDem.DEM_GENERATED, True)	
+					Element.SetValue(KratosFemDem.DEM_GENERATED, True)
+					Element.Set(KratosMultiphysics.TO_ERASE, True)	
 
 				# --------------------- 3RD SCENARIO -----------------------------
 				if NumberOfDEM == 1: # we must create 2 DEM
@@ -459,7 +464,8 @@ class FEMDEM_Solution:
 						Element.GetNodes()[1].SetValue(KratosMultiphysics.RADIUS, R1)
 
 					# DEM generated for this Element
-					Element.SetValue(KratosFemDem.DEM_GENERATED, True)	
+					Element.SetValue(KratosFemDem.DEM_GENERATED, True)
+					Element.Set(KratosMultiphysics.TO_ERASE, True)
 
 				# --------------------- 4TH SCENARIO -----------------------------
 				if NumberOfDEM == 3: # We must avoid possible indentations
@@ -508,6 +514,9 @@ class FEMDEM_Solution:
 
 					# DEM generated for this Element
 					Element.SetValue(KratosFemDem.DEM_GENERATED, True)	
+					Element.Set(KratosMultiphysics.TO_ERASE, True)
+
+		self.FEM_Solution.main_model_part.RemoveElementsFromAllLevels(KratosMultiphysics.TO_ERASE)
 
 #============================================================================================================================
 	def CheckForPossibleIndentations(self): # Verifies if an element has indentations between its DEM
@@ -658,7 +667,7 @@ class FEMDEM_Solution:
 					node.SetValue(KratosFemDem.NUMBER_OF_ACTIVE_ELEMENTS, NumberOfActiveElements)
 
 
-		NumberOfActiveElements = 0	
+		NumberOfActiveElements = 0
 		for node in FEM_Nodes:
 			NumberOfActiveElements = node.GetValue(KratosFemDem.NUMBER_OF_ACTIVE_ELEMENTS)
 
@@ -673,8 +682,8 @@ class FEMDEM_Solution:
 			# Reset the value to the next step
 			node.SetValue(KratosFemDem.NUMBER_OF_ACTIVE_ELEMENTS, 0)
 
-			# Remove inactive nodes
-			self.SpheresModelPart.RemoveElementsFromAllLevels(KratosMultiphysics.TO_ERASE)
+		# Remove inactive nodes
+		self.SpheresModelPart.RemoveElementsFromAllLevels(KratosMultiphysics.TO_ERASE)
 
 #============================================================================================================================
 	def TransferNodalForcesToFEM(self):
