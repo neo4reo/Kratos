@@ -45,6 +45,7 @@ namespace Kratos
         void CalculateOnIntegrationPoints(const Variable<Matrix >& rVariable, std::vector< Matrix >& rOutput, const ProcessInfo& rCurrentProcessInfo);
         void GetValueOnIntegrationPoints( const Variable<Matrix>& rVariable,std::vector<Matrix>& rValues,const ProcessInfo& rCurrentProcessInfo );
 
+		void FinalizeSolutionStep(ProcessInfo& rCurrentProcessInfo);
 
 		// Functions for plasticity of the steel
 		double GetKp() {return mKp;}
@@ -54,6 +55,30 @@ namespace Kratos
 		Vector GetPlasticDeformation() {return mPlasticDeformation;}
 		void SetPlasticDeformation(Vector toPlasticDeformation){mPlasticDeformation = toPlasticDeformation;}
 
+		// non converged values
+		double GetNonConvergedKp() {return mNonConvergedKp;}
+		void SetNonConvergedKp(double toNonConvergedKp){mNonConvergedKp = toNonConvergedKp;}
+		double GetNonConvergedCapap() {return mNonConvergedCapap;}
+		void SetNonConvergedCapap(double tomNonConvergedCapap){mNonConvergedCapap = tomNonConvergedCapap;}
+		Vector GetNonConvergedPlasticDeformation() {return mNonConvergedPlasticDeformation;}
+		void SetNonConvergedPlasticDeformation(Vector toNonConvergedPlasticDeformation){mNonConvergedPlasticDeformation = toNonConvergedPlasticDeformation;}
+
+		void ResetNonConvergedVars()
+		{
+			Vector Zero = ZeroVector(6);
+			SetNonConvergedKp(0.0);
+			SetNonConvergedCapap(0.0);
+			SetNonConvergedPlasticDeformation(Zero);
+		}
+
+		void UpdateAndSaveInternalVariables()
+		{
+			this->SetKp(this->GetNonConvergedKp());
+			this->SetCapap(this->GetNonConvergedCapap());
+			this->SetPlasticDeformation(this->GetNonConvergedPlasticDeformation());
+		}
+
+		// Methods
 		void IntegrateStressPlasticity(Vector& rIntegratedStress, const Vector& PredictiveStress, const Matrix& C);
 		void CalculatePlasticParameters(const Vector& StressVector,double& rYield, double& rKp,
 			double& rPlasticDenominator, Vector& rFluxVector, double& Capap,  const Vector& PlasticStrainIncr, const Matrix& C);
@@ -76,6 +101,10 @@ namespace Kratos
 	double mKp = 0.0; // Eq threshold
 	double mCapap = 0.0; // Normalized Plastic Dissipation
 	Vector mPlasticDeformation = ZeroVector(6); 
+
+	double mNonConvergedKp = 0.0;
+	double mNonConvergedCapap = 0.0;
+	Vector mNonConvergedPlasticDeformation = ZeroVector(6); 
 
 
 

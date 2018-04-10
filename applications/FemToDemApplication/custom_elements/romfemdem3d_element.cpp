@@ -205,7 +205,7 @@ namespace Kratos
         Vector StressVectorSteel;
         if (this->GetProperties()[STEEL_VOLUMETRIC_PART] > 0.0)
         {
-            StressVectorSteel = prod(ConstitutiveMatrixSteel, StrainVector);
+            StressVectorSteel = prod(ConstitutiveMatrixSteel, StrainVector - this->GetPlasticDeformation());
         }
         else StressVectorSteel = ZeroVector(voigt_size);
         
@@ -295,7 +295,7 @@ namespace Kratos
 				double DamageEdge = 0.0;
 				double Lchar = this->Get_l_char(edge);
 
-                // Integrate the stress on edge
+                // Integrate the stress on edge DAMAGE
 				this->IntegrateStressDamageMechanics(IntegratedStressVectorOnEdge, DamageEdge,
 					AverageStrainVectorConcrete, AverageStressVectorConcrete, edge, Lchar );
 				
@@ -346,7 +346,12 @@ namespace Kratos
 
 			//compute and add internal forces (RHS = rRightHandSideVector = Fext - Fint)
             Vector SteelStressVector = this->GetValue(STEEL_STRESS_VECTOR);
-            Vector CompositeStressVector = k*SteelStressVector + (1.0-k)*IntegratedStressVectorConcrete;
+			Vector IntegratedSteelVector = ZeroVector(voigt_size);
+
+			// Apply plasticity steel
+			this->IntegrateStressPlasticity(IntegratedSteelVector, SteelStressVector, ConstitutiveMatrixSteel);
+
+            Vector CompositeStressVector = k*IntegratedSteelVector + (1.0-k)*IntegratedStressVectorConcrete;
 			noalias(rRightHandSideVector) -= IntegrationWeight * prod(trans(B), CompositeStressVector);
 
 			// Add nodal DEM forces
@@ -454,7 +459,60 @@ namespace Kratos
 	// **** plasticity methods *****
 	void RomFemDem3DElement::IntegrateStressPlasticity(Vector& rIntegratedStress, const Vector& PredictiveStress, const Matrix& C)
 	{ // ecuua
+		int iter = 0, iter_max = 1000;
+		
+		double Kp = 0.0, Capap = 0.0;
+		Vector PlasticStrain = ZeroVector(6);
+		bool Conv = false;
 
+		// Get Converged values from the prev step
+		Kp            = this->GetKp();
+		Capap         = this->GetCapap();
+		PlasticStrain = this->GetPlasticDeformation();
+
+		double Yield = 0.0, PlasticDenominator = 0.0;
+		Vector FluxVector = ZeroVector(6), PlasticStrainIncr = ZeroVector(6);
+
+		// Compute Plastic variables
+		this->CalculatePlasticParameters(PredictiveStress, Yield, Kp,
+			PlasticDenominator, FluxVector, Capap, PlasticStrainIncr, C);
+
+		double F = Yield - Kp;
+
+		if (F < 1.0e-7 * Kp) rIntegratedStress = PredictiveStress;
+		else  // Plastic case
+		{
+			rIntegratedStress = PredictiveStress;
+			double DLambda = 0.0;
+			Vector DEEP = ZeroVector(6), DS = ZeroVector(6), DESIG = ZeroVector(6);
+
+			while (Conv == false && iter <= iter_max)
+			{
+				DLambda = F * PlasticDenominator;
+				PlasticStrainIncr = DLambda * FluxVector;
+				DEEP += PlasticStrainIncr;
+				PlasticStrain += DEEP;
+				DS = prod(C, PlasticStrainIncr);
+				DESIG -= DS;
+				rIntegratedStress -= DS;
+
+				this->CalculatePlasticParameters(rIntegratedStress, Yield, Kp,
+					PlasticDenominator, FluxVector, Capap, PlasticStrainIncr, C);
+
+				F = Yield - Kp;
+
+				if (F < 1.0e-7 * Kp)  // Has converged
+				{
+					Conv = true;
+					this->SetNonConvergedKp(Kp);
+					this->SetNonConvergedCapap(Capap);
+					this->SetNonConvergedPlasticDeformation(PlasticStrain);
+				} 
+				else iter++;
+
+				if (iter == iter_max) KRATOS_ERROR << "Reached Max iterations inside plasticity" << std::endl;
+			}
+		}
 	}
 
 	void RomFemDem3DElement::VonMisesYieldCriterion(const Vector& StressVector, Vector& rDeviator, double& ryield, double& rJ2)
@@ -525,7 +583,6 @@ namespace Kratos
 			sumb += SB[i];
 			sumc += SC[i];
 		}
-
 		if (suma != 0.0)
 		{
 			r0 = sumb/suma;
@@ -539,23 +596,27 @@ namespace Kratos
 	}
 
 	void RomFemDem3DElement::CalculatePlasticDissipation(const Vector& PredictiveSress, const double& r0, const double& r1,
-	 const Vector& PlasticStrainInc, double& Capap, Vector& rHCapa)
+	 const Vector& PlasticStrainInc, double& rCapap, Vector& rHCapa)
 	{
-		double n, Gf, Gfc, l_char, hlim, C0, C1, fc, ft, Volume, gf, gfc;
+		double n, Gf, Gfc, l_char, hlim, C0, C1, fc, ft, Volume, gf, gfc, E;
 
+		E   = this->GetProperties()[YOUNG_MODULUS_STEEL];
 		fc  = this->GetProperties()[YIELD_STRESS_C_STEEL];
 		ft  = this->GetProperties()[YIELD_STRESS_T_STEEL];
 		n   = fc/ft;
 		Gf  = this->GetProperties()[FRACTURE_ENERGY_STEEL];
 		Gfc = n*n*Gf;
 		Volume = this->GetGeometry().Volume();
-		l_char = pow(Volume, 1/3);  // not correct todo
+		l_char = pow(Volume, 1/3);  
 
-		gf  = Gf/l_char;
-		gfc = Gfc/l_char;
+		gf  = Gf  / l_char;
+		gfc = Gfc / l_char;
+
+		hlim = 2.0 * E * gfc / (fc * fc);
+		if (l_char > hlim) KRATOS_THROW_ERROR(std::invalid_argument, " Characteristic length lower than minimum ", l_char)
 
 		double Const0 = 0.0, Const1 = 0.0;
-		if (gf > 0.000001)  Const0 = r0 / gf;
+		if (gf  > 0.000001) Const0 = r0 / gf;
 		if (gfc > 0.000001) Const1 = r1 / gfc;
 
 		double Const = Const0 + Const1;
@@ -568,8 +629,7 @@ namespace Kratos
 		}
 
 		if (Dcapa < 0.0 | Dcapa > 1.0) Dcapa = 0.0;
-
-		Capap += Dcapa;
+		rCapap += Dcapa;
 	}
 
 	void RomFemDem3DElement::CalculateEquivalentStressThreshold(const double& Capap, const double& r0, const double& r1,
@@ -610,14 +670,13 @@ namespace Kratos
 		{
 			aux += HCapa[i] * FluxVector[i];
 		}
-
 		if (aux != 0.0) rHardeningParam *= aux;
 	}
 
 	void RomFemDem3DElement::CalculatePlasticDenominator(const Vector& FluxVector, const Matrix& ElasticConstMatrix,
 		const double& HardeningParam, double& rPlasticDenominator)
 	{   // only for isotropic hardening
-		double PlastDenom = 0.0, A1 = 0.0, A2 = 0.0, A3 = 0.0;
+		double A1 = 0.0, A2 = 0.0, A3 = 0.0;
 		Vector Dvect;
 
 		noalias(Dvect) = prod(FluxVector, ElasticConstMatrix);
@@ -634,7 +693,64 @@ namespace Kratos
 
 
 
+	void RomFemDem3DElement::FinalizeSolutionStep(ProcessInfo& rCurrentProcessInfo)
+	{
+		double CurrentfSigma = 0.0, damage_element = 0.0;
+		
+		//Loop over edges
+		for (int cont = 0; cont < 3; cont++)
+		{
+			this->Set_Convergeddamages(this->Get_NonConvergeddamages(cont), cont);
+			this->SetConverged_f_sigmas(this->Get_NonConvergedf_sigma(cont), cont);
+			CurrentfSigma = this->GetConverged_f_sigmas(cont);
+			if (CurrentfSigma > this->Get_threshold(cont)) { this->Set_threshold(CurrentfSigma, cont); }
+		} // End Loop over edges
 
+		damage_element = this->Get_NonConvergeddamage();
+		this->Set_Convergeddamage(damage_element);
+
+		if (damage_element > 0.0) 
+		{
+			this->SetValue(IS_DAMAGED, 1);
+		}
+		
+		if (damage_element >= 0.98)
+		{
+			this->Set(ACTIVE, false);
+			double old_threshold = this->GetValue(STRESS_THRESHOLD);
+			this->SetValue(INITIAL_THRESHOLD, old_threshold);
+		}
+
+		this->ResetNonConvergedVars();
+		this->SetToZeroIteration();
+
+		// computation of the equivalent damage threshold and damage of the element for AMR mapping
+		Vector thresholds = this->GetThresholds();
+		
+		Vector TwoMinValues;
+		this->Get2MaxValues(TwoMinValues, thresholds[0], thresholds[1], thresholds[2]);  // todo ojo con la funcion modificada
+		double EqThreshold = 0.5*(TwoMinValues[0] + TwoMinValues[1]);  // El menor o mayor?? TODO
+
+
+		this->SetValue(STRESS_THRESHOLD, EqThreshold); // AMR
+		this->Set_threshold(EqThreshold);
+		this->SetValue(DAMAGE_ELEMENT, damage_element);
+
+		// plasticity
+		this->UpdateAndSaveInternalVariables();
+		this->ResetNonConvergedVars();
+
+
+		// Reset the nodal force flag for the next time step
+		Geometry< Node < 3 > >& NodesElement = this->GetGeometry();
+		for (int i = 0; i < 3; i++)
+		{
+			#pragma omp critical
+			{
+				NodesElement[i].SetValue(NODAL_FORCE_APPLIED, false);
+			}
+		}
+	}
 
 
 } // Element
