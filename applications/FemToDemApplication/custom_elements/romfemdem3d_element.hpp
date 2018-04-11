@@ -44,6 +44,10 @@ namespace Kratos
         Vector& CalculateVolumeForce(Vector& rVolumeForce, const Vector& rN);
         void CalculateOnIntegrationPoints(const Variable<Matrix >& rVariable, std::vector< Matrix >& rOutput, const ProcessInfo& rCurrentProcessInfo);
         void GetValueOnIntegrationPoints( const Variable<Matrix>& rVariable,std::vector<Matrix>& rValues,const ProcessInfo& rCurrentProcessInfo );
+		void GetValueOnIntegrationPoints(const Variable<double>& rVariable, std::vector<double>& rValues,
+			const ProcessInfo& rCurrentProcessInfo);
+		void CalculateOnIntegrationPoints(const Variable<double>& rVariable, std::vector<double>& rOutput,
+			const ProcessInfo& rCurrentProcessInfo);
 
 		void FinalizeSolutionStep(ProcessInfo& rCurrentProcessInfo);
 
@@ -63,7 +67,7 @@ namespace Kratos
 		Vector GetNonConvergedPlasticDeformation() {return mNonConvergedPlasticDeformation;}
 		void SetNonConvergedPlasticDeformation(Vector toNonConvergedPlasticDeformation){mNonConvergedPlasticDeformation = toNonConvergedPlasticDeformation;}
 
-		void ResetNonConvergedVars()
+		void ResetNonConvergedVarsPlast()
 		{
 			Vector Zero = ZeroVector(6);
 			SetNonConvergedKp(0.0);

@@ -52,6 +52,9 @@ proc WriteMdpa { basename dir problemtypedir } {
 			puts $FileVar "    DENSITY_STEEL            [lindex [lindex $Groups $i] 15]"
 			puts $FileVar "    POISSON_RATIO_STEEL      [lindex [lindex $Groups $i] 16]"
 			puts $FileVar "    STEEL_VOLUMETRIC_PART    [lindex [lindex $Groups $i] 17]"
+			puts $FileVar "    YIELD_STRESS_C_STEEL     [lindex [lindex $Groups $i] 18]"
+			puts $FileVar "    YIELD_STRESS_T_STEEL     [lindex [lindex $Groups $i] 19]"
+			puts $FileVar "    FRACTURE_ENERGY_STEEL    [lindex [lindex $Groups $i] 20]"
 		}
         puts $FileVar ""
         puts $FileVar "// DAMAGE PARAMETERS"

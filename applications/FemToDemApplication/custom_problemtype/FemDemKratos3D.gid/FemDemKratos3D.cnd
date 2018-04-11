@@ -42,6 +42,12 @@ QUESTION: Poisson_Ratio_Fiber
 VALUE: 0.3
 QUESTION: Fiber_Volumetric_Participation
 VALUE: 0.1
+QUESTION: Yield_Stress_Compression_Fiber
+VALUE: 210e6
+QUESTION: Yield_Stress_Tension_Fiber
+VALUE: 210e6
+QUESTION: Fracture_Energy_Fiber
+VALUE: 1.5e5
 END CONDITION
 
 CONDITION: Initial_DEM_Part

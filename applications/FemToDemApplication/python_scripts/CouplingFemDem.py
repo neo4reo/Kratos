@@ -26,7 +26,7 @@ class FEMDEM_Solution:
 		self.DEM_Solution = DEM.DEM_for_coupling_Solution()
 
 		# Initialize Remeshing files
-		self.DoRemeshing = True #hard coded
+		self.DoRemeshing = False #hard coded
 		if self.DoRemeshing:
 			mmg_parameter_file = open("MMRParameters.json",'r')
 			self.mmg_parameters = KratosMultiphysics.Parameters(mmg_parameter_file.read())
@@ -87,7 +87,7 @@ class FEMDEM_Solution:
 		self.FEM_Solution.InitializeSolutionStep()  # modificado orden con initialize del mmg
 
 		# just for testing ->Remove
-		self.FEM_Solution.GraphicalOutputPrintOutput()
+		#self.FEM_Solution.GraphicalOutputPrintOutput()
 		# ***********************
 
 #============================================================================================================================
