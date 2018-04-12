@@ -205,8 +205,9 @@ namespace Kratos
         Vector StressVectorSteel;
         if (this->GetProperties()[STEEL_VOLUMETRIC_PART] > 0.0)
         {
-            StressVectorSteel = prod(ConstitutiveMatrixSteel, StrainVector - this->GetPlasticDeformation());
-			//StressVectorSteel = prod(ConstitutiveMatrixSteel, StrainVector);
+			Vector ElasticStrainVector = StrainVector - this->GetPlasticDeformation();
+            //StressVectorSteel = prod(ConstitutiveMatrixSteel, ElasticStrainVector);
+			StressVectorSteel = prod(ConstitutiveMatrixSteel, StrainVector);
         }
         else StressVectorSteel = ZeroVector(voigt_size);
         
@@ -481,23 +482,28 @@ namespace Kratos
 
 		double F = Yield - Kp;
 
-		KRATOS_WATCH(Yield)
-		KRATOS_WATCH(Kp)
-		KRATOS_WATCH(Capap)
-		KRATOS_WATCH(PlasticStrain)
-		KRATOS_WATCH(PredictiveStress)
+
 		//KRATOS_WATCH(PredictiveStress)
 		//KRATOS_WATCH(F)
 		//double toler = 1.0e-8 * Kp;
 		//KRATOS_WATCH(toler)
 		std::cout << "***" << std::endl;
 
-		if (F < abs(1.0e-8 * Kp))
+		if (F < abs(1.0e-15 * Kp))  // Elastic
 		{
+			KRATOS_WATCH(Yield)
+			//this->SetValue(EQUIVALENT_STRESS_VM, Yield);
+			KRATOS_WATCH(Kp)
+			KRATOS_WATCH(Capap)
+			KRATOS_WATCH(PlasticStrain)
+			KRATOS_WATCH(PredictiveStress)
+
+
 			rIntegratedStress = PredictiveStress;
 			this->SetNonConvergedKp(Kp);
 			this->SetNonConvergedCapap(Capap);
 			this->SetNonConvergedPlasticDeformation(PlasticStrain);
+			this->SetValue(EQUIVALENT_STRESS_VM, Yield);
 		}
 		else  // Plastic case
 		{
@@ -522,17 +528,20 @@ namespace Kratos
 
 				F = Yield - Kp;
 
-				 KRATOS_WATCH(Yield)
-				 KRATOS_WATCH(Kp)
-				 KRATOS_WATCH(Capap)
-				 KRATOS_WATCH(rIntegratedStress)
-
-				if (F < abs(1.0e-8 * Kp))  // Has converged
+				if (F < abs(1.0e-15 * Kp))  // Has converged
 				{
+					KRATOS_WATCH(Yield)
+					//this->SetValue(EQUIVALENT_STRESS_VM, Yield);
+					KRATOS_WATCH(Kp)
+					KRATOS_WATCH(Capap)
+					KRATOS_WATCH(rIntegratedStress)
+					KRATOS_WATCH(PlasticStrain)
+
 					Conv = true;
 					this->SetNonConvergedKp(Kp);
 					this->SetNonConvergedCapap(Capap);
 					this->SetNonConvergedPlasticDeformation(PlasticStrain);
+					this->SetValue(EQUIVALENT_STRESS_VM, Yield);
 				}
 				else iter++;
 
